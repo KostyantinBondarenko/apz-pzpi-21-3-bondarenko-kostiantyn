@@ -1,0 +1,377 @@
+1.1 Мета роботи
+
+Розробити серверну частину програмної системи для атоматизації інвентаризації, описати прийняті інженерні рішення, загальну архітектуру системи, показати будову її серверних компонентів та структуру бази даних.
+
+1.2 Хід роботи
+
+1)	Опис інженерних рішень;
+Для серверної частини програмної системи використовувався фреймворк .NET, мова програмування C#. Для збереження даних був використаний MS SQL Server.
+
+2)	Діаграма розгортання;
+На рисунку 1 зображена діграма розгортання. Вона складається з таких вузлів: бекенд сервер, веб застосунок, сервер бази даних, мобільний застосунок, розумний пристрій.
+
+3)	Розробити UML діаграму пакетів (Package Diagram);
+На рисунку 2 зображена діаграма пакетів. Система містить складається з 5 пакетів, на діаграмі зображені їх залежності. Пакет Презентація залежить від пакетів Інфраструктури та Роботи з даними, а також від пакету Бізнес логіки. Вони в свою чергу залежать від пакету Абстракцій. Останнім у ланцюгу залежностей є пакет доменних сутностей.
+
+4)	ER-модель даних;
+На рисунку 3 зображена ER-модель системи. Основними сутностями є Спорт, Команда, Атлет, Тренувальна сесія, Метрика виконання, Метрика здоров’я. Команда обирає спорт, має атлетів та може почати тренувальну сесію. Під час тренувальних сесій відстежуються метрики виконання та метрики здоров’я.
+
+5)	Архітектура системи;
+Був використаний підхід DDD (Domain Driven Desing) та було вирішено використовувати Hexagonal архітектуру для побудови серверної частини системи. Основна особливість цієї архітектури полягає в створенні програмного забезпечення з розділеними шарами (доменний, інфраструктурний та рівень додатка), де бізнес-логіка розміщена в центральному доменному рівні, незалежно від інших шарів. Це сприяє полегшенню тестування, збереженню гнучкості та нев'язкості системи, а також забезпечує легше управління залежностями.
+
+6)	Діаграма прецедентів;
+На рисунку 4 зображена діаграма прецедентів програмної системи автоматизації інвентаризації. Система матиме 4 ролі: тренер, атлет, адміністратор системи, адміністратор бази даних.
+
+7)	Створити специфікацію REST;
+Специфікаця REST наведена у додатку А.
+
+1.3 Висновки
+В результаті виконання лабораторної роботи було розроблено серверну частину програмної системи для атоматизації інвентаризації, описано прийняті інженерні рішення, загальну архітектуру системи, показано будову її серверних компонентів та структуру бази даних.
+
+ДОДАТОК А
+Шлях	Метод	Призначення
+/api/databaseOperations/backup	POST	Бекап бази даних
+/api/databaseOperations/restore	POST	Відновлення бази даних
+/api/auth/login	POST	Вхід в акаунт
+/api/auth/signup	POST	Створення акаунту
+/api/users	GET	Отримання всіх користувачів
+/api/users/{id}	GET	Отримання одного користувача
+/api/sports	GET	Отримати всі спорти
+/api/athletes	GET	Отримати всіх атлетів
+/api/athletes/{id}	GET	Отримати одного атлету
+/api/athletes	POST	Створення атлету
+/api/teams	GET	Отримання всіх команд
+/api/teams/{id}	GET	Отримання однієї команди
+/api/teams	POST	Створення команди
+/api/teams/{id}/athletes	POST	Додавання атлету до команди
+/api/teams/{id}/athletes	DELETE	Видалення атлету з команди
+/api/sessions	GET	Отримання сесії
+/api/sessions/{id}/performanceMetrics	GET	Отримання метрик виконання за сесію
+/api/sessions/{id}/healthMetrics	GET	Отримання метрик здоров'я за сесію
+/api/sessions	POST	Створення сесії
+/api/sessions/{id}/performanceMetrics	POST	Створення метрики
+/api/sessions/{id}/healthMetrics	POST	Створення метрики
+/api/sessions/{id}/performanceMetrics/batch	POST	Створення метрик
+/api/sessions/{id}/healthMetrics/batch	POST	Створення метрик
+/api/sessions/{id}	DELETE	Видалення сесії
+
+ДОДАТОК Б
+AuthService.cs
+1. public class AuthService: IAuthService
+2. {
+3.     private readonly UserManager<User> _userManager;
+4.     private readonly SignInManager<User> _signInManager;
+5.     private readonly IMapper _mapper;
+6.     private readonly IJwtService _jwtHandler;
+7. 
+8.     public AuthService(
+9.         UserManager<User> userManager,
+10.         SignInManager<User> signInManager,
+11.         IMapper mapper, 
+12.         IJwtService jwtHandler)
+13.     {
+14.         _userManager = userManager;
+15.         _signInManager = signInManager;
+16.         _mapper = mapper;
+17.         _jwtHandler = jwtHandler;
+18.     }
+19. 
+20.     public async Task<JwtTokenDto> LoginAsync(
+21.         LoginDto loginDto,
+22.         CancellationToken cancellationToken = default)
+23.     {
+24.         var user = await _userManager.FindByEmailAsync(loginDto.Email)
+25.             ?? throw new ApplicationException("Invalid email or password");
+26. 
+27.         var result = await _signInManager
+28.             .PasswordSignInAsync(user, loginDto.Password, false, false);
+29. 
+30.         if (!result.Succeeded)
+31.         {
+32.             throw new ApplicationException("Invalid email or password");
+33.         }
+34. 
+35.         var claims = await _jwtHandler.GetClaimsAsync(user.Id);
+36.         var signingCredentials = _jwtHandler.GetSigningCredentials();
+37.         var token = _jwtHandler.GenerateToken(signingCredentials, claims);
+38. 
+39.         return new JwtTokenDto
+40.         {
+41.             Token = new JwtSecurityTokenHandler().WriteToken(token),
+42.         };
+43.     }
+44. 
+45.     public async Task SignupAsync(
+46.         SignupDto signupDto,
+47.         CancellationToken cancellationToken = default)
+48.     {
+49.         var user = _mapper.Map<User>(signupDto);
+50. 
+51.         user.UserName = user.Email;
+52.         
+53.         var result = await _userManager.CreateAsync(user, signupDto.Password);
+54. 
+55.         if (!result.Succeeded)
+56.         {
+57.             throw new ApplicationException(result.ToString());
+58.         }
+59.     }
+60. 
+61.     public async Task ResetPasswordAsync(
+62.         ChangePasswordDto changePasswordDto,
+63.         CancellationToken cancellationToken = default)
+64.     {
+65.         var user = await _userManager.FindByEmailAsync(changePasswordDto.Email)
+66.                    ?? throw new ApplicationException($"User with email {changePasswordDto.Email} was not found");
+67. 
+68.         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+69.         var result = await _userManager.ResetPasswordAsync(user, token, changePasswordDto.Password);
+70. 
+71.         if (!result.Succeeded)
+72.         {
+73.             throw new ApplicationException("Failed to reset password");
+74.         }
+75.     }
+76. }
+
+JwtService.cs
+1. public class JwtService: IJwtService
+2. {
+3.     private readonly JwtOptions _jwtOptions;
+4.     private readonly UserManager<User> _userManager;
+5.     
+6.     public JwtService(
+7.         IOptions<JwtOptions> jwtSettings,
+8.         UserManager<User> userManager)
+9.     {
+10.         _jwtOptions = jwtSettings.Value;
+11.         _userManager = userManager;
+12.     }
+13.     
+14.     public SigningCredentials GetSigningCredentials()
+15.     {
+16.         var key = Encoding.UTF8.GetBytes(_jwtOptions.Key);
+17.         var secret = new SymmetricSecurityKey(key);
+18. 
+19.         return new SigningCredentials(secret, SecurityAlgorithms.HmacSha256);
+20.     }
+21.     
+22.     public async Task<List<Claim>> GetClaimsAsync(Guid userId)
+23.     {
+24.         var user = await _userManager.FindByIdAsync(userId.ToString());
+25.         if (user is null)
+26.         {
+27.             throw new ApplicationException("User was not found");
+28.         }
+29.     
+30.         var claims = new List<Claim>
+31.         {
+32.             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+33.             new(JwtRegisteredClaimNames.Email, user.Email!),
+34.             new(ClaimTypes.Role, "User")
+35.         };
+36. 
+37.         var userRoles = await _userManager.GetRolesAsync(user);
+38. 
+39.         claims.AddRange(userRoles.Select(role => new Claim(ClaimsIdentity.DefaultRoleClaimType, role)));
+40. 
+41.         return claims;
+42.     }
+43.     
+44.     public JwtSecurityToken GenerateToken(SigningCredentials signingCredentials,
+45.         IEnumerable<Claim> claims)
+46.     {
+47.         var token = new JwtSecurityToken(
+48.             issuer: _jwtOptions.Issuer,
+49.             audience: _jwtOptions.Audience,
+50.             claims: claims,
+51.             expires: DateTime.Now.AddDays(30),
+52.             signingCredentials: signingCredentials);
+53. 
+54.         return token;
+55.     }
+56. }
+
+
+
+GenericRepository.cs
+1. public class GenericRepository<TEntity>: IGenericRepository<TEntity> where TEntity: class
+2. {
+3.     private readonly AppDbContext _context;
+4.     protected readonly DbSet<TEntity> DbSet;
+5. 
+6.     protected GenericRepository(AppDbContext context)
+7.     {
+8.         _context = context;
+9.         DbSet = context.Set<TEntity>();
+10.     }
+11. 
+12.     public async Task<IEnumerable<TEntity>> GetAllAsync(
+13.         bool asNoTracking = false, 
+14.         CancellationToken cancellationToken = default)
+15.     {
+16.         return asNoTracking
+17.             ? await DbSet.AsNoTracking().ToListAsync(cancellationToken)
+18.             : await DbSet.ToListAsync(cancellationToken);
+19.     }
+20.     
+21.     public virtual async Task<TEntity?> GetByIdAsync(
+22.         Guid id, 
+23.         bool asNoTracking = false, 
+24.         CancellationToken cancellationToken = default)
+25.     {
+26.         return asNoTracking
+27.             ? await DbSet.AsNoTracking().FirstOrDefaultAsync(cancellationToken)
+28.             : await DbSet.FirstOrDefaultAsync(cancellationToken);
+29.     }
+30. 
+31.     public async Task CreateAsync(
+32.         TEntity entity, 
+33.         CancellationToken cancellationToken = default)
+34.     {
+35.         await _context.AddAsync(entity, cancellationToken);
+36.     }
+37. 
+38.     public void Update(TEntity entity)
+39.     {
+40.         _context.Update(entity);
+41.     }
+42. 
+43.     public void Delete(TEntity entity)
+44.     {
+45.         _context.Remove(entity);
+46.     }
+47. }
+
+
+
+
+SessionEndpointDefinition.cs
+1. public class SessionEndpointDefinition : IEndpointDefinition
+2. {
+3.     public void RegisterEndpoints(WebApplication app)
+4.     {
+5.         var sessionGroup = app.MapGroup("/api/sessions");
+6. 
+7.         sessionGroup.MapGet("/", GetSessions);
+8.         sessionGroup.MapGet("/{id}/performanceMetrics", GetPerformanceMetrics);
+9.         sessionGroup.MapGet("/{id}/healthMetrics", GetHealthMetrics);
+10.         sessionGroup.MapPost("/", CreateSession);
+11.         sessionGroup.MapPost("/{id}/performanceMetrics", CreatePerformanceMetric);
+12.         sessionGroup.MapPost("/{id}/performanceMetrics/batch", PopulatePerformanceMetrics);
+13.         sessionGroup.MapPost("/{id}/healthMetrics", CreateHealthMetric);
+14.         sessionGroup.MapPost("/{id}/healthMetrics/batch", PopulateHealthMetrics);
+15.         sessionGroup.MapDelete("/{id}", DeleteSession);
+16.     }
+17. 
+18.     private static async Task<IResult> GetSessions(
+19.         IMediator mediator,
+20.         [BindRequired] Guid teamId)
+21.     {
+22.         var sessions = await mediator.Send(new GetSessionsQuery(teamId));
+23.         return Results.Ok(sessions);
+24.     }
+25.     
+26.     private static async Task<IResult> GetPerformanceMetrics(
+27.         IMediator mediator,
+28.         [FromRoute] Guid id,
+29.         [AsParameters] GetPerformanceMetricsRequest getPerformanceMetricsRequest)
+30.     {
+31.         var performanceMetrics = await mediator.Send(new GetPerformanceMetricsQuery(
+32.             id,
+33.             getPerformanceMetricsRequest.TeamAthleteId,
+34.             getPerformanceMetricsRequest.MetricType,
+35.             getPerformanceMetricsRequest.DateFrom,
+36.             getPerformanceMetricsRequest.DateTo));
+37.         return Results.Ok(performanceMetrics);
+38.     }
+39. 
+40.     private static async Task<IResult> GetHealthMetrics(
+41.         IMediator mediator,
+42.         [FromRoute] Guid id,
+43.         [AsParameters] GetHealthMetricsRequest getHealthMetricsRequest)
+44.     {
+45.         var healthMetrics = await mediator.Send(new GetHealthMetricsQuery(
+46.             id,
+47.             getHealthMetricsRequest.TeamAthleteId,
+48.             getHealthMetricsRequest.MetricType,
+49.             getHealthMetricsRequest.DateFrom,
+50.             getHealthMetricsRequest.DateTo));
+51.         return Results.Ok(healthMetrics);
+52.     }
+53.     
+54.     private static async Task<IResult> CreateSession(
+55.         IMediator mediator,
+56.         [FromBody] CreateSessionRequest createSessionRequest)
+57.     {
+58.         var session = await mediator.Send(new CreateSessionCommand(
+59.             createSessionRequest.TeamId, 
+60.             createSessionRequest.Duration));
+61.         return Results.Ok(session);
+62.     }
+63. 
+64.     private static async Task<IResult> CreatePerformanceMetric(
+65.         IMediator mediator,
+66.         [FromRoute] Guid id,
+67.         [FromBody] CreatePerformanceMetricRequest createPerformanceMetricRequest)
+68.     {
+69.         await mediator.Send(new CreatePerformanceMetricCommand(
+70.             id,
+71.             createPerformanceMetricRequest.TeamAthleteId,
+72.             createPerformanceMetricRequest.MetricType,
+73.             createPerformanceMetricRequest.MetricValue));
+74.         return Results.NoContent();
+75.     }
+76. 
+77.     private static async Task<IResult> PopulatePerformanceMetrics(
+78.         IMediator mediator,
+79.         [FromRoute] Guid id,
+80.         [FromBody] PopulatePerformanceMetricsRequest populatePerformanceMetricsRequest)
+81.     {
+82.         await mediator.Send(new PopulatePerformanceMetricsCommand(
+83.             id,
+84.             populatePerformanceMetricsRequest.TeamAthleteId,
+85.             populatePerformanceMetricsRequest.Metrics));
+86.         return Results.NoContent();
+87.     }
+88. 
+89.     private static async Task<IResult> CreateHealthMetric(
+90.         IMediator mediator,
+91.         [FromRoute] Guid id,
+92.         [FromBody] CreateHealthMetricRequest createHealthMetricRequest)
+93.     {
+94.         await mediator.Send(new CreateHealthMetricCommand(
+95.             id,
+96.             createHealthMetricRequest.TeamAthleteId,
+97.             createHealthMetricRequest.MetricType,
+98.             createHealthMetricRequest.MetricValue));
+99.         return Results.NoContent();
+100.     }
+101. 
+102.     private static async Task<IResult> PopulateHealthMetrics(
+103.         IMediator mediator,
+104.         [FromRoute] Guid id,
+105.         [FromBody] PopulateHealthMetricsRequest populateHealthMetricsRequest)
+106.     {
+107.         await mediator.Send(new PopulateHealthMetricsCommand(
+108.             id,
+109.             populateHealthMetricsRequest.TeamAthleteId,
+110.             populateHealthMetricsRequest.Metrics));
+111.         return Results.NoContent();
+112.     }
+113.     
+114.     private static async Task<IResult> DeleteSession(
+115.         IMediator mediator,
+116.         [FromRoute] Guid id)
+117.     {
+118.         await mediator.Send(new DeleteSessionCommand(id));
+119.         return Results.NoContent();
+120.     }
+121. }
+
+
+
+
+
+
+

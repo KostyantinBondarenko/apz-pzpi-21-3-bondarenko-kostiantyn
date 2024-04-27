@@ -1,0 +1,8 @@
+﻿CREATE TABLE [dbo].[Teams]
+(
+	[Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+	[Name] NVARCHAR(450) NOT NULL,
+	[CountryName] NVARCHAR(450) NULL,
+	[SportId] UNIQUEIDENTIFIER,
+	CONSTRAINT	[FK_Teams_SportId] FOREIGN KEY ([SportId]) REFERENCES [dbo].[Sports]([Id])
+)
